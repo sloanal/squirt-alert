@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE = 'reserve-v4';
+const CACHE = 'reserve-v5';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest', 'icon-180.png', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png'];
 const META = 'reserve-meta';
 

@@ -46,4 +46,13 @@ Tap the clock button next to **Log release** to log one you couldn't log at the 
 
 For server-sent push that always arrives, even when the app is closed, the app needs a small backend that sends Web Push (VAPID) at those times.
 
-Data stays on your device (`localStorage`). Not a medical device.
+## Your data
+
+Data stays on your device (`localStorage`). There is no server, so it's lost if you remove the app or clear site data. To guard against that:
+
+- **Back up** in Settings saves a JSON file. On a phone it opens the share sheet, so you can pick **Save to Files**. **Restore** loads a backup and replaces what's on the device. Restoring can be undone from the toast.
+- When there are changes that haven't been backed up for over a week, the Settings button shows a dot and the app reminds you, at most once every two days.
+- The app asks the browser to keep its storage (`navigator.storage.persist()`), and Settings shows whether it's protected. On iPhone, use the Home Screen app: Safari can clear a site's data after 7 days without a visit.
+- If the saved data can't be read, it's kept under `reserve.v1.unreadable` instead of being overwritten.
+
+Not a medical device.

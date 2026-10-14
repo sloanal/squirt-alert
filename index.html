@@ -170,6 +170,25 @@
       <button class="chip" id="settingsPast">Open</button>
     </div>
 
+    <div class="group-label">Your data</div>
+    <div class="row">
+      <div>
+        <div class="row-title">Backup</div>
+        <div class="row-sub" id="backupSub">Nothing to back up yet</div>
+      </div>
+      <div class="chips">
+        <button class="chip" id="import">Restore</button>
+        <button class="chip" id="export">Back up</button>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <div class="row-title">Stored on this device</div>
+        <div class="row-sub" id="storageSub">The browser may clear it if the device runs low on space.</div>
+      </div>
+    </div>
+    <input type="file" id="importFile" accept=".json,application/json" hidden>
+
     <details class="science">
       <summary>How the model works</summary>
       <p><b>Sperm vs. fluid.</b> Sperm are made in the testes and stored in the epididymis. More than 90% of the fluid comes from the seminal vesicles and prostate. The two refill at different speeds, so Reserve tracks them separately.</p>
@@ -180,7 +199,6 @@
     </details>
 
     <div class="row danger">
-      <button class="chip" id="export">Export data</button>
       <button class="chip warn" id="reset">Reset all</button>
     </div>
   </aside>
