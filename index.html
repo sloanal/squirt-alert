@@ -26,13 +26,36 @@
     <section class="hero" aria-live="polite">
       <div class="status" id="status">—</div>
       <div class="reading">
-        <span class="value" id="value">0.00</span><span class="unit">mL</span>
+        <span class="value" id="value">0</span><span class="unit">M sperm</span>
       </div>
-      <div class="meter" aria-hidden="true"><div class="meter-fill" id="meterFill"></div></div>
-      <div class="meta">
-        <span id="pct">0%</span>
+      <div class="sub-reading">
+        <span class="swatch vol"></span><span id="volValue">0.00 mL</span><span class="muted">volume</span>
         <span class="sep"></span>
-        <span id="eta">—</span>
+        <span id="since">—</span>
+      </div>
+    </section>
+
+    <section class="window-card">
+      <div class="window-head">
+        <div>
+          <div class="window-title" id="windowTitle">Fertility window</div>
+          <div class="window-sub" id="windowSub">—</div>
+        </div>
+        <div class="window-badge" id="windowBadge">—</div>
+      </div>
+      <div class="track" id="track" aria-hidden="true">
+        <div class="zone z-recharge"></div>
+        <div class="zone z-prime"></div>
+        <div class="zone z-good"></div>
+        <div class="zone z-stale"></div>
+        <div class="marker" id="marker"></div>
+      </div>
+      <div class="track-labels">
+        <span style="left:0">0</span>
+        <span style="left:10%">1d</span>
+        <span style="left:40%">4d</span>
+        <span style="left:70%">7d</span>
+        <span style="left:100%">10d+</span>
       </div>
     </section>
 
@@ -45,11 +68,16 @@
           <button role="tab" data-range="30">30D</button>
         </div>
       </div>
+      <div class="legend">
+        <span><i class="swatch sperm"></i>Sperm</span>
+        <span><i class="swatch vol"></i>Volume</span>
+        <span><i class="swatch prime"></i>Prime window</span>
+        <span><i class="swatch dash"></i>Projected</span>
+      </div>
       <div class="chart" id="chart">
-        <svg id="chartSvg" role="img" aria-label="Line chart of reserve volume over time"></svg>
+        <svg id="chartSvg" role="img" aria-label="Line chart of sperm count and semen volume as a percentage of full, over time"></svg>
         <div class="tip" id="tip" hidden></div>
       </div>
-      <div class="legend-note"><span class="dash"></span>Projected refill</div>
     </section>
 
     <section class="stats">
@@ -76,34 +104,59 @@
     <div class="grabber"></div>
     <h3>Settings</h3>
 
+    <div class="group-label">Alerts</div>
     <div class="row">
       <div>
-        <div class="row-title">Full alerts</div>
-        <div class="row-sub" id="notifSub">Get notified when you're back to full</div>
+        <div class="row-title">Prime window opens</div>
+        <div class="row-sub" id="notifSub">24h after a release</div>
       </div>
-      <label class="switch"><input type="checkbox" id="notifToggle"><span></span></label>
+      <label class="switch"><input type="checkbox" data-alert="prime"><span></span></label>
     </div>
-
+    <div class="row">
+      <div>
+        <div class="row-title">7-day nudge</div>
+        <div class="row-sub">Motility and DNA quality decline after this</div>
+      </div>
+      <label class="switch"><input type="checkbox" data-alert="stale"><span></span></label>
+    </div>
+    <div class="row">
+      <div>
+        <div class="row-title">Volume full</div>
+        <div class="row-sub">Fluid back to 95% of capacity</div>
+      </div>
+      <label class="switch"><input type="checkbox" data-alert="full"><span></span></label>
+    </div>
     <div class="row">
       <div>
         <div class="row-title">Calendar reminder</div>
-        <div class="row-sub">Most reliable alert on iPhone — adds a reminder at your full time</div>
+        <div class="row-sub">Most reliable on iPhone. Adds your next prime window.</div>
       </div>
       <button class="chip" id="ics">Add</button>
     </div>
 
+    <div class="group-label">Your baseline</div>
     <div class="row">
       <div>
-        <div class="row-title">Capacity</div>
-        <div class="row-sub">Avg for men 40–44 · mL</div>
+        <div class="row-title">Sperm per ejaculate</div>
+        <div class="row-sub">Use "total sperm count" from a semen analysis</div>
       </div>
-      <div class="stepper">
-        <button data-step="-0.1" aria-label="Decrease">−</button>
-        <output id="capOut">3.0</output>
-        <button data-step="0.1" aria-label="Increase">+</button>
+      <div class="stepper" data-field="spermCap" data-step="10" data-min="10" data-max="800" data-dp="0" data-unit="M">
+        <button data-dir="-1" aria-label="Decrease">−</button>
+        <output>250M</output>
+        <button data-dir="1" aria-label="Increase">+</button>
       </div>
     </div>
-
+    <div class="row">
+      <div>
+        <div class="row-title">Volume</div>
+        <div class="row-sub">Avg for men 40–44 is about 3 mL</div>
+      </div>
+      <div class="stepper" data-field="cap" data-step="0.1" data-min="0.5" data-max="8" data-dp="1" data-unit=" mL">
+        <button data-dir="-1" aria-label="Decrease">−</button>
+        <output>3.0</output>
+        <button data-dir="1" aria-label="Increase">+</button>
+      </div>
+    </div>
     <div class="row">
       <div>
         <div class="row-title">Backdate a release</div>
@@ -114,10 +167,11 @@
 
     <details class="science">
       <summary>How the model works</summary>
-      <p><b>Capacity.</b> Studies of men aged 40–44 report average ejaculate volumes of about 2.5–3.4 mL. Reserve uses 3.0 mL as "full". Most of that fluid comes from the seminal vesicles and prostate. The testes contribute the sperm, which is only around 5% of the volume.</p>
-      <p><b>Release.</b> Each logged release drains about 90% of the current reserve.</p>
-      <p><b>Refill.</b> Refill follows an exponential curve with a time constant of about 1.6 days. That works out to roughly 50% after 1 day, about 85% after 3 days and about 98% after 6 days. These figures match MRI data showing the seminal vesicles refill over about 3 days, and abstinence studies where volume rises from about 1.8 mL at 1 day to about 3.5 mL at 6 or more days. "Full" means 95%.</p>
-      <p class="fine">This is an estimate for fun and general awareness, not a medical device.</p>
+      <p><b>Sperm vs. fluid.</b> Sperm are made in the testes and stored in the epididymis. More than 90% of the fluid comes from the seminal vesicles and prostate. The two refill at different speeds, so Reserve tracks them separately.</p>
+      <p><b>Sperm.</b> By default a full reserve is about 250 million per ejaculate, roughly the typical total count after 2–7 days of abstinence. A release empties about 60% of the stored sperm. The store then refills slowly, with a time constant of about 3 days: around 57% after 1 day, 78% after 3 days and 94% after 7 days. Sperm count keeps rising with abstinence for longer than volume does.</p>
+      <p><b>Volume.</b> The default is 3.0 mL, the average for men aged 40–44. A release drains about 90% of the fluid. It refills with a time constant of about 1.6 days, consistent with seminal-vesicle MRI studies.</p>
+      <p><b>Fertility window.</b> In studies, DNA fragmentation (damage to sperm DNA) is lowest after 1–2 days of abstinence and rises with longer gaps. Motility (how well sperm swim) drops after more than 7 days. Releases less than 24 hours apart may cost a little quality. Reserve therefore marks 1–4 days as <i>prime</i>, 4–7 days as <i>good</i> and 7+ days as <i>stale</i>. The WHO recommends 2–7 days before a semen test and ESHRE suggests 3–4. When trying to conceive, sex every 1–2 days in the fertile window is the usual advice.</p>
+      <p class="fine">These are population averages, not your numbers. A semen analysis gives you a real baseline. This is not a medical device.</p>
     </details>
 
     <div class="row danger">

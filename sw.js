@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE = 'reserve-v1';
+const CACHE = 'reserve-v2';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 const META = 'reserve-meta';
 
@@ -30,31 +30,33 @@ self.addEventListener('fetch', (e) => {
   );
 });
 
-// The page tells us when the next "full" moment is.
+// The page tells us which alerts are coming up: [{ key, at, title, body }].
 async function readSchedule() {
   const res = await (await caches.open(META)).match('schedule');
-  return res ? res.json() : { fullAt: null };
+  return res ? res.json() : { alerts: [] };
 }
 async function writeSchedule(s) {
   await (await caches.open(META)).put('schedule', new Response(JSON.stringify(s)));
 }
 
 self.addEventListener('message', (e) => {
-  if (e.data?.type === 'schedule') e.waitUntil(writeSchedule({ fullAt: e.data.fullAt, cap: e.data.cap }));
+  if (e.data?.type === 'schedule') e.waitUntil(writeSchedule({ alerts: e.data.alerts || [] }));
 });
 
-// Periodic background sync (installed PWAs on Chromium): check if we've passed the full time.
+// Periodic background sync (installed PWAs on Chromium): show the latest alert that has come due.
 self.addEventListener('periodicsync', (e) => {
   if (e.tag !== 'reserve-check') return;
   e.waitUntil((async () => {
-    const s = await readSchedule();
-    if (!s.fullAt || Date.now() < s.fullAt) return;
-    await self.registration.showNotification('You’re full', {
-      body: `Reserve is back to ${(s.cap ?? 3).toFixed(1)} mL.`,
-      tag: 'reserve-full',
+    const { alerts = [] } = await readSchedule();
+    const now = Date.now();
+    const due = alerts.filter((a) => a.at <= now).sort((a, b) => b.at - a.at);
+    if (!due.length) return;
+    await self.registration.showNotification(due[0].title, {
+      body: due[0].body,
+      tag: 'reserve',
       icon: 'icon-192.png',
     });
-    await writeSchedule({ ...s, fullAt: null });
+    await writeSchedule({ alerts: alerts.filter((a) => a.at > now) });
   })());
 });
 

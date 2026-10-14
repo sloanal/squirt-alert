@@ -1,10 +1,27 @@
 # Reserve
 
-A mobile-first PWA that estimates your reserve and how it refills over time.
+A mobile-first PWA that estimates your sperm and semen reserves. It shows how they refill after each release and when you're in your best fertility window.
 
-- **Capacity:** 3.0 mL by default, the mean ejaculate volume for men aged about 40–44. You can change it in Settings.
-- **Release:** each logged release drains about 90% of the current reserve.
-- **Refill:** exponential, with a time constant of about 1.6 days. That gives roughly 50% after 1 day, 85% after 3 days and 98% after 6 days. "Full" is 95%.
+## Model
+
+Sperm and fluid are made in different places and refill at different speeds, so Reserve tracks them separately.
+
+| | Sperm (epididymis) | Volume (seminal vesicles + prostate) |
+|---|---|---|
+| Full | 250M per ejaculate (set your own in Settings) | 3.0 mL, average for men 40–44 |
+| Drained per release | ~60% | ~90% |
+| Refill time constant | ~3 days | ~1.6 days |
+
+**Fertility window** (time since your last release):
+
+| Time | Phase | Why |
+|---|---|---|
+| < 1 day | Recharge | Very short gaps may slightly lower quality |
+| 1–4 days | Prime | DNA damage lowest at 1–2 days; count building |
+| 4–7 days | Good | Within the WHO 2–7 day range |
+| > 7 days | Stale | Motility drops and DNA damage rises |
+
+The chart shows both reserves as a percentage of full on a single axis. Shaded bands mark prime windows.
 
 ## Run
 
@@ -18,10 +35,11 @@ To put it on your phone, host it over HTTPS (GitHub Pages works). Then open it a
 
 ## Full alerts
 
-- **App open or in the background:** you get a local notification when the reserve hits full.
+- **Alerts available:** prime window opens (24h after a release), a 7-day nudge, and volume full. Turn each on in Settings.
+- **App open or in the background:** you get a local notification when an alert comes due.
 - **App closed:** Chromium browsers try Notification Triggers and then Periodic Background Sync. Both are best-effort and depend on the browser.
-- **iPhone:** use **Settings → Calendar reminder**. It adds a calendar event with an alert at your projected full time, which is the most reliable option.
+- **iPhone:** use **Settings → Calendar reminder**. It adds your next prime window to your calendar, with an alert when it opens, which is the most reliable option.
 
-For server-sent push that always arrives, even when the app is closed, the app needs a small backend that sends Web Push (VAPID) at the full time.
+For server-sent push that always arrives, even when the app is closed, the app needs a small backend that sends Web Push (VAPID) at those times.
 
 Data stays on your device (`localStorage`). Not a medical device.
