@@ -22,6 +22,9 @@
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
 const KEY = 'reserve.v1';
+// Push server (push-server/). Safari home-screen apps only show server-sent
+// pushes, so alerts that must arrive while the app is closed go through it.
+const PUSH_SERVER = '';
 const FULL = 0.95;
 
 const COMPARTMENTS = {
@@ -44,6 +47,8 @@ const defaults = () => ({
   events: [],
   alerts: { prime: false, stale: false, full: false },
   notified: {},
+  deviceId: crypto.randomUUID?.() ?? String(Math.random()).slice(2),
+  pushActive: false,
 });
 
 const store = {
@@ -56,6 +61,7 @@ const store = {
     s.spermCap ??= d.spermCap;
     s.alerts ??= { ...d.alerts, full: !!s.notify };
     s.notified ??= {};
+    s.deviceId ??= d.deviceId;
     delete s.notify;
     delete s.notifiedFor;
     return s;
@@ -365,6 +371,10 @@ async function setAlert(id, on) {
   if (on && Notification.permission !== 'granted') {
     on = (await Notification.requestPermission()) === 'granted';
   }
+  // Safari wants the push subscription created in the same tap as the permission prompt.
+  if (on && PUSH_SERVER && 'PushManager' in window) {
+    try { await subscribePush(swReg || (await navigator.serviceWorker.ready)); } catch {}
+  }
   state.alerts[id] = on;
   // Don't fire for moments that already passed before the alert was switched on.
   if (on) plannedAlerts().filter((a) => a.at <= Date.now()).forEach((a) => (state.notified[a.key] = true));
@@ -373,8 +383,8 @@ async function setAlert(id, on) {
   scheduleAlerts();
 }
 
-async function notify(title, body) {
-  const opts = { body, icon: 'icon-192.png', badge: 'icon-192.png', tag: 'reserve' };
+async function notify(title, body, tag = 'reserve') {
+  const opts = { body, icon: 'icon-192.png', badge: 'icon-192.png', tag };
   try {
     const reg = swReg || (await navigator.serviceWorker?.ready);
     if (reg) return reg.showNotification(title, opts);
@@ -385,6 +395,7 @@ async function notify(title, body) {
 /** Fire any alert whose moment has passed, once per refill cycle. */
 function checkAlerts() {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  if (state.pushActive) return; // the push server delivers these
   const now = Date.now();
   // Only the most recent due alert is shown, so reopening after days away doesn't stack three.
   const due = plannedAlerts().filter((a) => a.at <= now);
@@ -392,7 +403,7 @@ function checkAlerts() {
   due.forEach((a) => (state.notified[a.key] = true));
   store.save(state);
   const latest = due.sort((a, b) => b.at - a.at)[0];
-  notify(latest.title, latest.body);
+  notify(latest.title, latest.body, `reserve-${latest.key}`);
 }
 
 /**
@@ -404,6 +415,8 @@ async function scheduleAlerts() {
   const reg = swReg || (await navigator.serviceWorker?.ready.catch(() => null));
   if (!reg) return;
   const upcoming = plannedAlerts().filter((a) => a.at > Date.now());
+  await syncPush(reg, upcoming);
+  if (state.pushActive) return;
   reg.active?.postMessage({ type: 'schedule', alerts: upcoming });
 
   try {
@@ -422,6 +435,48 @@ async function scheduleAlerts() {
   if (upcoming.length && 'periodicSync' in reg) {
     try { await reg.periodicSync.register('reserve-check', { minInterval: HOUR }); } catch {}
   }
+}
+
+async function fetchVapidKey() {
+  if (!PUSH_SERVER || state.vapidKey) return state.vapidKey;
+  try {
+    state.vapidKey = (await (await fetch(`${PUSH_SERVER}/key`)).json()).publicKey;
+    store.save(state);
+  } catch {}
+  return state.vapidKey;
+}
+
+async function subscribePush(reg) {
+  const existing = await reg.pushManager.getSubscription();
+  if (existing) return existing;
+  const key = state.vapidKey || (await fetchVapidKey());
+  return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+}
+
+/** Register this device with the push server and hand it the upcoming alerts. */
+async function syncPush(reg, upcoming) {
+  const wanted = Object.values(state.alerts).some(Boolean);
+  if (!PUSH_SERVER || !('PushManager' in window) || !reg.pushManager) return;
+  if (!wanted && !state.pushActive) return;
+  try {
+    let subscription = null;
+    if (wanted && Notification.permission === 'granted') {
+      subscription = await subscribePush(reg);
+    }
+    const res = await fetch(`${PUSH_SERVER}/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: state.deviceId,
+        subscription: subscription?.toJSON() ?? null,
+        alerts: upcoming.map(({ key, at, title, body }) => ({ key, at, title, body })),
+      }),
+    });
+    state.pushActive = res.ok && !!subscription;
+  } catch {
+    state.pushActive = false; // fall back to local alerts
+  }
+  store.save(state);
 }
 
 function downloadICS() {
@@ -589,4 +644,5 @@ setInterval(renderChart, 5 * 60_000);
 
 render();
 updateAlertUI();
+fetchVapidKey();
 registerSW().then(() => { checkAlerts(); scheduleAlerts(); });

@@ -1,0 +1,25 @@
+name: Deploy push server
+
+on:
+  push:
+    branches: [main]
+    paths: ['push-server/**', '.github/workflows/push-server.yml']
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CONFIGURED: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+    steps:
+      - if: env.CONFIGURED != 'true'
+        run: echo "::notice::Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID repo secrets to deploy the push server."
+      - if: env.CONFIGURED == 'true'
+        uses: actions/checkout@v4
+      - if: env.CONFIGURED == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: push-server
+          wranglerVersion: '4.20.0'
