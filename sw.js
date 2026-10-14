@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE = 'reserve-v3';
+const CACHE = 'reserve-v2';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 const META = 'reserve-meta';
 
@@ -58,18 +58,6 @@ self.addEventListener('periodicsync', (e) => {
     });
     await writeSchedule({ alerts: alerts.filter((a) => a.at > now) });
   })());
-});
-
-// Server-sent alerts from push-server/. Every push must show a notification (Safari requires it).
-self.addEventListener('push', (e) => {
-  let data = {};
-  try { data = e.data?.json() ?? {}; } catch {}
-  e.waitUntil(self.registration.showNotification(data.title || 'Reserve', {
-    body: data.body || '',
-    tag: data.tag || 'reserve',
-    icon: 'icon-192.png',
-    badge: 'icon-192.png',
-  }));
 });
 
 self.addEventListener('notificationclick', (e) => {

@@ -33,25 +33,13 @@ python3 -m http.server 8000   # then open http://localhost:8000
 
 To put it on your phone, host it over HTTPS (GitHub Pages works). Then open it and use **Share → Add to Home Screen** on iPhone or **Install app** on Android.
 
-## Alerts
+## Full alerts
 
-There are three alerts: prime window opens (24h after a release), a 7-day nudge, and volume full. Turn each on in Settings.
+- **Alerts available:** prime window opens (24h after a release), a 7-day nudge, and volume full. Turn each on in Settings.
+- **App open or in the background:** you get a local notification when an alert comes due.
+- **App closed:** Chromium browsers try Notification Triggers and then Periodic Background Sync. Both are best-effort and depend on the browser.
+- **iPhone:** use **Settings → Calendar reminder**. It adds your next prime window to your calendar, with an alert when it opens, which is the most reliable option.
 
-Safari home-screen apps (iOS 16.4+) can't schedule notifications on the device. They only show **server-sent Web Push**. So upcoming alerts go to a small push server in [`push-server/`](push-server/), a Cloudflare Worker with one Durable Object. It stores each device's push subscription and sets an alarm for the next alert. It generates its own VAPID keys on first run, so there are no keys to manage.
+For server-sent push that always arrives, even when the app is closed, the app needs a small backend that sends Web Push (VAPID) at those times.
 
-How it flows: the app subscribes to push, then sends `POST /sync` with its upcoming alert times on every release and settings change. When an alert is due, the Durable Object alarm fires and sends the push.
-
-Without a push server configured (`PUSH_SERVER` in `app.js` is empty), alerts fall back to local notifications while the app is open, plus best-effort background delivery on Chromium.
-
-### Deploying the push server
-
-It deploys automatically through GitHub Actions (`.github/workflows/push-server.yml`) on pushes to `main` that touch `push-server/`. The free Cloudflare plan is enough.
-
-1. Create a Cloudflare account and open **Workers & Pages** once, which sets up your `workers.dev` subdomain.
-2. Create an API token from the **Edit Cloudflare Workers** template, and copy your **Account ID**.
-3. Add both as repo secrets: `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
-4. Run the **Deploy push server** workflow. Then set `PUSH_SERVER` in `app.js` to the printed `https://reserve-push.<subdomain>.workers.dev` URL.
-
-On iPhone, add the app to your Home Screen, open it from there, and turn on an alert. The permission prompt appears then.
-
-Your release log stays on your device (`localStorage`). The push server only receives your push subscription and the times of upcoming alerts. Not a medical device.
+Data stays on your device (`localStorage`). Not a medical device.
