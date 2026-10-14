@@ -44,18 +44,30 @@ const defaults = () => ({
   events: [],
   alerts: { prime: false, stale: false, full: false },
   notified: {},
+  backedUpAt: null, // last export
+  dirtySince: null, // first change not yet in a backup
+  remindedAt: 0, // last backup reminder
 });
 
 const store = {
   load() {
-    let s;
-    try { s = JSON.parse(localStorage.getItem(KEY)); } catch {}
-    if (!s || !Array.isArray(s.events)) return defaults();
+    let raw = null;
+    let s = null;
+    try { raw = localStorage.getItem(KEY); s = JSON.parse(raw); } catch {}
+    if (!s || !Array.isArray(s.events)) {
+      // Set unreadable data aside rather than overwrite it on the next save.
+      if (raw) try { localStorage.setItem(`${KEY}.unreadable`, raw); } catch {}
+      return defaults();
+    }
     // Migrate v1 state (volume only, single "notify" flag).
     const d = defaults();
     s.spermCap ??= d.spermCap;
     s.alerts ??= { ...d.alerts, full: !!s.notify };
     s.notified ??= {};
+    s.backedUpAt ??= null;
+    s.remindedAt ??= 0;
+    // Data saved before backups existed is unsaved since its first release.
+    if (s.dirtySince === undefined) s.dirtySince = s.events[0] ?? null;
     delete s.notify;
     delete s.notifiedFor;
     return s;
@@ -364,6 +376,10 @@ function plannedAlerts() {
     .filter((a) => !state.notified[a.key]);
 }
 
+function silencePastAlerts() {
+  plannedAlerts().filter((a) => a.at <= Date.now()).forEach((a) => (state.notified[a.key] = true));
+}
+
 function updateAlertUI() {
   const supported = 'Notification' in window;
   const denied = supported && Notification.permission === 'denied';
@@ -389,7 +405,7 @@ async function setAlert(id, on) {
   }
   state.alerts[id] = on;
   // Don't fire for moments that already passed before the alert was switched on.
-  if (on) plannedAlerts().filter((a) => a.at <= Date.now()).forEach((a) => (state.notified[a.key] = true));
+  if (on) silencePastAlerts();
   store.save(state);
   updateAlertUI();
   scheduleAlerts();
@@ -476,11 +492,14 @@ function downloadICS() {
 let toastTimer = null;
 let undoFn = null;
 
-function commit() {
+/** Save and redraw. `dirty` marks a change that isn't in a backup yet. */
+function commit(dirty = true) {
   state.events.sort((a, b) => a - b);
+  if (dirty) state.dirtySince ??= Date.now();
   store.save(state);
   render();
   scheduleAlerts();
+  if (state.events.length && persisted !== true) protectStorage();
 }
 
 function addEvent(t) {
@@ -507,13 +526,14 @@ function logRelease() {
   cta.classList.add('fire');
 }
 
-function toast(text, undo = null) {
-  undoFn = undo;
-  $('undo').hidden = !undo;
+function toast(text, action = null, label = 'Undo', ms = 5000) {
+  undoFn = action;
+  $('undo').hidden = !action;
+  $('undo').textContent = label;
   $('toastText').textContent = text;
   $('toast').hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => ($('toast').hidden = true), 5000);
+  toastTimer = setTimeout(() => ($('toast').hidden = true), ms);
 }
 
 let openSheetId = null;
@@ -580,6 +600,121 @@ function openPast() {
   openSheet('pastSheet');
 }
 
+/* ------------------------------------------------------------------
+ * Backup and restore
+ *
+ * Everything lives in localStorage, which is erased if the app is
+ * removed or site data is cleared. Ask the browser to keep it, and
+ * remind the user to export a backup they can restore from.
+ * ------------------------------------------------------------------ */
+const BACKUP_EVERY = 7 * DAY;
+let persisted = null;
+
+async function protectStorage() {
+  if (!navigator.storage?.persist) return;
+  try { persisted = (await navigator.storage.persisted()) || (await navigator.storage.persist()); } catch {}
+  renderBackup();
+}
+
+const backupOverdue = () =>
+  state.events.length > 0 && state.dirtySince != null && Date.now() - state.dirtySince > BACKUP_EVERY;
+
+function renderBackup() {
+  const due = backupOverdue();
+  $('openSettings').classList.toggle('badge', due);
+  const sub = $('backupSub');
+  sub.classList.toggle('due', due);
+  if (state.backedUpAt) {
+    sub.textContent = `Last backup ${fmtDay(state.backedUpAt)}${state.dirtySince != null ? ' · changes since' : ''}`;
+  } else {
+    sub.textContent = state.events.length ? 'Never backed up' : 'Nothing to back up yet';
+  }
+
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  $('storageSub').textContent = persisted
+    ? 'Protected from automatic clearing. Removing the app still erases it.'
+    : /iP(hone|ad)/.test(navigator.userAgent) && !standalone
+      ? 'Safari may clear it after 7 days without a visit. Add to Home Screen to keep it.'
+      : 'The browser may clear it if the device runs low on space.';
+}
+
+function remindBackup() {
+  if (!backupOverdue() || Date.now() - state.remindedAt < 2 * DAY) return;
+  state.remindedAt = Date.now();
+  store.save(state);
+  toast(state.backedUpAt ? 'No backup in over a week' : 'Your data isn’t backed up', exportBackup, 'Back up', 10_000);
+}
+
+async function exportBackup() {
+  const name = `reserve-backup-${toLocalInput(Date.now()).slice(0, 10)}.json`;
+  const file = new File([JSON.stringify(state, null, 2)], name, { type: 'application/json' });
+  let shared = false;
+  // On phones the share sheet offers Save to Files; a download link is unreliable there.
+  if (matchMedia('(pointer: coarse)').matches && navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file] });
+      shared = true;
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+    }
+  }
+  if (!shared) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(file);
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  state.backedUpAt = Date.now();
+  state.dirtySince = null;
+  store.save(state);
+  renderBackup();
+  toast('Backup saved');
+}
+
+/** Validate a backup's contents and build a state from it, or return null. */
+function fromBackup(data) {
+  if (!data || !Array.isArray(data.events)) return null;
+  const now = Date.now();
+  const events = [...new Set(data.events.filter((e) => Number.isFinite(e) && e > 0 && e <= now))].sort((a, b) => a - b);
+  const first = events[0] ?? now;
+  const inRange = (v, min, max, fallback) => (Number.isFinite(v) && v >= min && v <= max ? v : fallback);
+  const limits = (field) => document.querySelector(`.stepper[data-field="${field}"]`).dataset;
+  const field = (name) => inRange(data[name], Number(limits(name).min), Number(limits(name).max), state[name]);
+  return {
+    ...defaults(),
+    cap: field('cap'),
+    spermCap: field('spermCap'),
+    start: inRange(data.start, 0, first, first - 10 * DAY),
+    events,
+    alerts: state.alerts, // notification permission belongs to this device
+    backedUpAt: now,
+  };
+}
+
+async function importBackup(file) {
+  let next = null;
+  try { next = fromBackup(JSON.parse(await file.text())); } catch {}
+  if (!next) {
+    toast('That file isn’t a Reserve backup');
+    return;
+  }
+  const n = state.events.length;
+  const m = next.events.length;
+  if (n && !confirm(`Replace your ${n} logged release${n === 1 ? '' : 's'} with the ${m} in this backup?`)) return;
+  const prev = state;
+  state = next;
+  silencePastAlerts();
+  shownValue = null;
+  commit(false);
+  openSheet('sheet', false);
+  toast(`Restored ${m} release${m === 1 ? '' : 's'}`, () => {
+    state = prev;
+    shownValue = null;
+    commit(false);
+  });
+}
+
 function renderSteppers() {
   document.querySelectorAll('.stepper').forEach((s) => {
     s.querySelector('output').textContent = state[s.dataset.field].toFixed(Number(s.dataset.dp)) + s.dataset.unit;
@@ -590,6 +725,7 @@ function render() {
   renderHero();
   renderChart();
   renderSteppers();
+  renderBackup();
   if (openSheetId === 'pastSheet') renderHistory();
 }
 
@@ -657,11 +793,12 @@ document.querySelectorAll('.stepper').forEach((s) => {
   );
 });
 
-$('export').addEventListener('click', () => {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }));
-  a.download = 'reserve-data.json';
-  a.click();
+$('export').addEventListener('click', exportBackup);
+$('import').addEventListener('click', () => $('importFile').click());
+$('importFile').addEventListener('change', (e) => {
+  const [file] = e.target.files;
+  e.target.value = ''; // so picking the same file again still fires
+  if (file) importBackup(file);
 });
 
 $('reset').addEventListener('click', () => {
@@ -678,7 +815,7 @@ addEventListener('resize', () => {
   resizeRaf = requestAnimationFrame(renderChart);
 });
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) { render(); checkAlerts(); }
+  if (!document.hidden) { render(); checkAlerts(); remindBackup(); }
 });
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', renderChart);
 
@@ -687,4 +824,6 @@ setInterval(renderChart, 5 * 60_000);
 
 render();
 updateAlertUI();
+if (state.events.length) protectStorage();
+remindBackup();
 registerSW().then(() => { checkAlerts(); scheduleAlerts(); });
