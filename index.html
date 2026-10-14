@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#09090c" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Reserve">
+  <title>Reserve</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app">
+    <header class="top">
+      <div class="brand"><span class="dot"></span>Reserve</div>
+      <button class="icon-btn" id="openSettings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+      </button>
+    </header>
+
+    <section class="hero" aria-live="polite">
+      <div class="status" id="status">—</div>
+      <div class="reading">
+        <span class="value" id="value">0.00</span><span class="unit">mL</span>
+      </div>
+      <div class="meter" aria-hidden="true"><div class="meter-fill" id="meterFill"></div></div>
+      <div class="meta">
+        <span id="pct">0%</span>
+        <span class="sep"></span>
+        <span id="eta">—</span>
+      </div>
+    </section>
+
+    <section class="chart-card">
+      <div class="chart-head">
+        <h2>Reserve over time</h2>
+        <div class="seg" role="tablist" id="range">
+          <button role="tab" data-range="1">24H</button>
+          <button role="tab" data-range="7" aria-selected="true">7D</button>
+          <button role="tab" data-range="30">30D</button>
+        </div>
+      </div>
+      <div class="chart" id="chart">
+        <svg id="chartSvg" role="img" aria-label="Line chart of reserve volume over time"></svg>
+        <div class="tip" id="tip" hidden></div>
+      </div>
+      <div class="legend-note"><span class="dash"></span>Projected refill</div>
+    </section>
+
+    <section class="stats">
+      <div class="stat"><div class="k">Last release</div><div class="v" id="statLast">—</div></div>
+      <div class="stat"><div class="k">Releases · 7d</div><div class="v" id="statWeek">0</div></div>
+      <div class="stat"><div class="k">Avg interval</div><div class="v" id="statAvg">—</div></div>
+    </section>
+
+    <div class="cta-wrap">
+      <button class="cta" id="release">
+        <span class="cta-ring"></span>
+        <span class="cta-label">Log release</span>
+      </button>
+    </div>
+  </main>
+
+  <div class="toast" id="toast" hidden>
+    <span id="toastText">Logged</span>
+    <button id="undo">Undo</button>
+  </div>
+
+  <div class="sheet-backdrop" id="backdrop" hidden></div>
+  <aside class="sheet" id="sheet" aria-hidden="true" role="dialog" aria-label="Settings">
+    <div class="grabber"></div>
+    <h3>Settings</h3>
+
+    <div class="row">
+      <div>
+        <div class="row-title">Full alerts</div>
+        <div class="row-sub" id="notifSub">Get notified when you're back to full</div>
+      </div>
+      <label class="switch"><input type="checkbox" id="notifToggle"><span></span></label>
+    </div>
+
+    <div class="row">
+      <div>
+        <div class="row-title">Calendar reminder</div>
+        <div class="row-sub">Most reliable alert on iPhone — adds a reminder at your full time</div>
+      </div>
+      <button class="chip" id="ics">Add</button>
+    </div>
+
+    <div class="row">
+      <div>
+        <div class="row-title">Capacity</div>
+        <div class="row-sub">Avg for men 40–44 · mL</div>
+      </div>
+      <div class="stepper">
+        <button data-step="-0.1" aria-label="Decrease">−</button>
+        <output id="capOut">3.0</output>
+        <button data-step="0.1" aria-label="Increase">+</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <div class="row-title">Backdate a release</div>
+        <div class="row-sub">Log one you forgot</div>
+      </div>
+      <input type="datetime-local" id="backdate" class="dt">
+    </div>
+
+    <details class="science">
+      <summary>How the model works</summary>
+      <p><b>Capacity.</b> Studies of men aged 40–44 report average ejaculate volumes of about 2.5–3.4 mL. Reserve uses 3.0 mL as "full". Most of that fluid comes from the seminal vesicles and prostate. The testes contribute the sperm, which is only around 5% of the volume.</p>
+      <p><b>Release.</b> Each logged release drains about 90% of the current reserve.</p>
+      <p><b>Refill.</b> Refill follows an exponential curve with a time constant of about 1.6 days. That works out to roughly 50% after 1 day, about 85% after 3 days and about 98% after 6 days. These figures match MRI data showing the seminal vesicles refill over about 3 days, and abstinence studies where volume rises from about 1.8 mL at 1 day to about 3.5 mL at 6 or more days. "Full" means 95%.</p>
+      <p class="fine">This is an estimate for fun and general awareness, not a medical device.</p>
+    </details>
+
+    <div class="row danger">
+      <button class="chip" id="export">Export data</button>
+      <button class="chip warn" id="reset">Reset all</button>
+    </div>
+  </aside>
+
+  <script src="app.js"></script>
+</body>
+</html>
