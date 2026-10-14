@@ -87,10 +87,15 @@
     </section>
 
     <div class="cta-wrap">
-      <button class="cta" id="release">
-        <span class="cta-ring"></span>
-        <span class="cta-label">Log release</span>
-      </button>
+      <div class="cta-row">
+        <button class="cta" id="release">
+          <span class="cta-ring"></span>
+          <span class="cta-label">Log release</span>
+        </button>
+        <button class="cta-alt" id="openPast" aria-label="Log an earlier release">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6"/><path d="M3 4v4h4"/><path d="M12 7.5V12l3 2"/></svg>
+        </button>
+      </div>
     </div>
   </main>
 
@@ -159,10 +164,10 @@
     </div>
     <div class="row">
       <div>
-        <div class="row-title">Backdate a release</div>
-        <div class="row-sub">Log one you forgot</div>
+        <div class="row-title">Earlier releases</div>
+        <div class="row-sub">Log one after the fact, or fix a mistake</div>
       </div>
-      <input type="datetime-local" id="backdate" class="dt">
+      <button class="chip" id="settingsPast">Open</button>
     </div>
 
     <details class="science">
@@ -178,6 +183,29 @@
       <button class="chip" id="export">Export data</button>
       <button class="chip warn" id="reset">Reset all</button>
     </div>
+  </aside>
+
+  <aside class="sheet" id="pastSheet" aria-hidden="true" role="dialog" aria-label="Log an earlier release">
+    <div class="grabber"></div>
+    <h3>Log an earlier release</h3>
+    <p class="sheet-sub">For when you couldn't log it in the moment.</p>
+
+    <div class="presets" id="presets">
+      <button class="chip" data-ago="1">1h ago</button>
+      <button class="chip" data-ago="3">3h ago</button>
+      <button class="chip" data-ago="6">6h ago</button>
+      <button class="chip" data-ago="12">12h ago</button>
+      <button class="chip" data-ago="24">Yesterday</button>
+      <button class="chip" data-ago="48">2 days ago</button>
+    </div>
+    <label class="when-row">
+      <div class="row-title">Date &amp; time</div>
+      <input type="datetime-local" id="pastWhen" class="dt wide">
+    </label>
+    <button class="cta" id="logPast"><span class="cta-label" id="logPastLabel">Log release</span></button>
+
+    <div class="group-label">Recent releases</div>
+    <ul class="history" id="history"></ul>
   </aside>
 
   <script src="app.js"></script>

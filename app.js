@@ -206,7 +206,29 @@ function sampleTimes(from, to, n) {
   return ts.sort((a, b) => a - b);
 }
 
+/**
+ * Size the chart to fill the space between its top and the fixed Log
+ * button, so the whole chart is on screen without scrolling. Re-fit only
+ * when the width or the content above the chart changes: in Safari the
+ * height changes as the toolbar shows and hides, and re-fitting then
+ * would make the page jump.
+ */
+let fitKey = '';
+function fitChart() {
+  const chart = $('chart');
+  const card = chart.closest('.chart-card');
+  const top = chart.getBoundingClientRect().top + scrollY;
+  const key = `${innerWidth}:${Math.round(top)}`;
+  if (key === fitKey) return;
+  fitKey = key;
+  const below = card.getBoundingClientRect().bottom - chart.getBoundingClientRect().bottom;
+  const ctaTop = $('release').getBoundingClientRect().top;
+  const h = Math.round(ctaTop - 10 - below - top);
+  chart.style.height = `${Math.min(260, Math.max(150, h))}px`;
+}
+
 function renderChart() {
+  fitChart();
   const svg = $('chartSvg');
   const { width: W, height: H } = svg.getBoundingClientRect();
   if (!W) return;
@@ -452,7 +474,7 @@ function downloadICS() {
  * Actions
  * ------------------------------------------------------------------ */
 let toastTimer = null;
-let undoTs = null;
+let undoFn = null;
 
 function commit() {
   state.events.sort((a, b) => a - b);
@@ -461,12 +483,23 @@ function commit() {
   scheduleAlerts();
 }
 
-function logRelease(t = Date.now()) {
-  const before = levelAt('sperm', t);
+function addEvent(t) {
+  if (t < state.start) state.start = t - 10 * DAY; // assume rested before the earliest record
   state.events.push(t);
   commit();
-  undoTs = t;
-  toast(`~${fmtSperm(before - levelAt('sperm', t))}M sperm released`);
+}
+
+function removeEvent(t) {
+  const i = state.events.lastIndexOf(t);
+  if (i >= 0) state.events.splice(i, 1);
+  commit();
+}
+
+function logRelease() {
+  const t = Date.now();
+  const before = levelAt('sperm', t);
+  addEvent(t);
+  toast(`~${fmtSperm(before - levelAt('sperm', t))}M sperm released`, () => removeEvent(t));
   navigator.vibrate?.([12, 40, 18]);
   const cta = $('release');
   cta.classList.remove('fire');
@@ -474,21 +507,77 @@ function logRelease(t = Date.now()) {
   cta.classList.add('fire');
 }
 
-function toast(text) {
+function toast(text, undo = null) {
+  undoFn = undo;
+  $('undo').hidden = !undo;
   $('toastText').textContent = text;
   $('toast').hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => ($('toast').hidden = true), 5000);
 }
 
-function openSheet(open) {
-  $('sheet').classList.toggle('open', open);
-  $('sheet').setAttribute('aria-hidden', String(!open));
-  $('backdrop').hidden = !open;
-  if (open) {
-    const d = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
-    $('backdate').max = d.toISOString().slice(0, 16);
+let openSheetId = null;
+function openSheet(id, open = true) {
+  if (openSheetId && openSheetId !== id) {
+    $(openSheetId).classList.remove('open');
+    $(openSheetId).setAttribute('aria-hidden', 'true');
   }
+  $(id).classList.toggle('open', open);
+  $(id).setAttribute('aria-hidden', String(!open));
+  $('backdrop').hidden = !open;
+  openSheetId = open ? id : null;
+}
+
+/* ------------------------------------------------------------------
+ * Log an earlier release
+ * ------------------------------------------------------------------ */
+/** Timestamp → value for <input type="datetime-local"> in local time. */
+const toLocalInput = (t) => new Date(t - new Date(t).getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+
+function pastTime() {
+  const t = new Date($('pastWhen').value).getTime();
+  return Number.isFinite(t) && t <= Date.now() ? t : null;
+}
+
+function renderPastForm() {
+  const t = pastTime();
+  $('logPast').disabled = t == null;
+  $('logPastLabel').textContent = t == null ? 'Pick a time in the past' : `Log release · ${fmtDuration(Date.now() - t)} ago`;
+}
+
+function setPastTime(t, presetBtn = null) {
+  $('pastWhen').value = toLocalInput(t);
+  for (const b of $('presets').children) b.setAttribute('aria-pressed', String(b === presetBtn));
+  renderPastForm();
+}
+
+function renderHistory() {
+  const list = $('history');
+  const now = Date.now();
+  const recent = state.events.slice(-12).reverse();
+  if (!recent.length) {
+    list.innerHTML = '<li class="history-empty">No releases logged yet</li>';
+    return;
+  }
+  list.replaceChildren(...recent.map((t) => {
+    const li = document.createElement('li');
+    li.innerHTML =
+      `<span>${fmtDay(t)} · ${fmtTime(t)}<span class="ago">${fmtDuration(now - t)} ago</span></span>` +
+      `<button aria-label="Delete release">` +
+      `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
+    li.querySelector('button').addEventListener('click', () => {
+      removeEvent(t);
+      toast(`Deleted ${fmtDay(t)} ${fmtTime(t)}`, () => addEvent(t));
+    });
+    return li;
+  }));
+}
+
+function openPast() {
+  $('pastWhen').max = toLocalInput(Date.now());
+  setPastTime(Date.now() - HOUR, $('presets').children[0]);
+  renderHistory();
+  openSheet('pastSheet');
 }
 
 function renderSteppers() {
@@ -501,6 +590,7 @@ function render() {
   renderHero();
   renderChart();
   renderSteppers();
+  if (openSheetId === 'pastSheet') renderHistory();
 }
 
 /* ------------------------------------------------------------------
@@ -508,10 +598,9 @@ function render() {
  * ------------------------------------------------------------------ */
 $('release').addEventListener('click', () => logRelease());
 $('undo').addEventListener('click', () => {
-  const i = state.events.lastIndexOf(undoTs);
-  if (i >= 0) state.events.splice(i, 1);
   $('toast').hidden = true;
-  commit();
+  undoFn?.();
+  undoFn = null;
 });
 
 $('range').addEventListener('click', (e) => {
@@ -528,8 +617,26 @@ chartEl.addEventListener('pointerdown', onPointer);
 chartEl.addEventListener('pointerleave', hideTip);
 chartEl.addEventListener('pointerup', (e) => { if (e.pointerType !== 'mouse') setTimeout(hideTip, 1600); });
 
-$('openSettings').addEventListener('click', () => openSheet(true));
-$('backdrop').addEventListener('click', () => openSheet(false));
+$('openSettings').addEventListener('click', () => openSheet('sheet'));
+$('backdrop').addEventListener('click', () => openSheet(openSheetId, false));
+$('openPast').addEventListener('click', openPast);
+$('settingsPast').addEventListener('click', openPast);
+$('presets').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-ago]');
+  if (b) setPastTime(Date.now() - Number(b.dataset.ago) * HOUR, b);
+});
+$('pastWhen').addEventListener('input', () => {
+  for (const b of $('presets').children) b.setAttribute('aria-pressed', 'false');
+  renderPastForm();
+});
+$('logPast').addEventListener('click', () => {
+  const t = pastTime();
+  if (t == null) return;
+  addEvent(t);
+  toast(`Logged ${fmtDay(t)} ${fmtTime(t)}`, () => removeEvent(t));
+  navigator.vibrate?.(12);
+  openSheet('pastSheet', false);
+});
 document.querySelectorAll('[data-alert]').forEach((input) =>
   input.addEventListener('change', () => setAlert(input.dataset.alert, input.checked)),
 );
@@ -550,15 +657,6 @@ document.querySelectorAll('.stepper').forEach((s) => {
   );
 });
 
-$('backdate').addEventListener('change', (e) => {
-  const t = new Date(e.target.value).getTime();
-  if (!Number.isFinite(t) || t > Date.now()) return;
-  if (t < state.start) state.start = t - 10 * DAY; // assume rested before the earliest record
-  logRelease(t);
-  e.target.value = '';
-  openSheet(false);
-});
-
 $('export').addEventListener('click', () => {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }));
@@ -571,7 +669,7 @@ $('reset').addEventListener('click', () => {
   state = { ...defaults(), cap: state.cap, spermCap: state.spermCap, alerts: state.alerts };
   shownValue = null;
   commit();
-  openSheet(false);
+  openSheet('sheet', false);
 });
 
 let resizeRaf = 0;

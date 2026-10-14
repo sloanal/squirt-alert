@@ -33,6 +33,10 @@ python3 -m http.server 8000   # then open http://localhost:8000
 
 To put it on your phone, host it over HTTPS (GitHub Pages works). Then open it and use **Share → Add to Home Screen** on iPhone or **Install app** on Android.
 
+## Logging after the fact
+
+Tap the clock button next to **Log release** to log one you couldn't log at the time. Pick a quick preset (1h ago, yesterday, …) or set an exact date and time. The same sheet lists your recent releases so you can delete a mistake. Every log and delete can be undone from the toast.
+
 ## Full alerts
 
 - **Alerts available:** prime window opens (24h after a release), a 7-day nudge, and volume full. Turn each on in Settings.
